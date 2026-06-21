@@ -1,0 +1,71 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch: # يسمح بتشغيل البناء يدوياً
+
+jobs:
+  build:
+    runs-on: macos-latest # يستخدم سيرفر ماك من جيت هوب
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Create Xcode Project (Web2App)
+        run: |
+          # إنشاء مشروع Xcode أساسي عبر سكربت bash
+          mkdir -p MovieBoxApp
+          cd MovieBoxApp
+          # هنا يتم إنشاء ملفات Swift الأساسية لفتح الـ WebView
+          cat > ContentView.swift << 'EOF'
+          import SwiftUI
+          import WebKit
+
+          struct ContentView: UIViewRepresentable {
+              let url: URL
+              func makeUIView(context: Context) -> WKWebView {
+                  let webView = WKWebView()
+                  webView.load(URLRequest(url: url))
+                  webView.allowsBackForwardNavigationGestures = true
+                  return webView
+              }
+              func updateUIView(_ uiView: WKWebView, context: Context) {}
+          }
+          EOF
+          
+          cat > MovieBoxAppApp.swift << 'EOF'
+          import SwiftUI
+
+          @main
+          struct MovieBoxAppApp: App {
+              var body: some Scene {
+                  WindowGroup {
+                      ContentView(url: URL(string: "https://movie-box.co/")!)
+                  }
+              }
+          }
+          EOF
+
+      - name: Build Unsigned IPA
+        run: |
+          xcodebuild -project MovieBoxApp.xcodeproj \
+          -scheme MovieBoxApp \
+          -configuration Release \
+          -archivePath build/MovieBoxApp.xcarchive \
+          -destination "generic/platform=iOS" \
+          archive CODE_SIGNING_ALLOWED=NO
+
+          mkdir -p Payload
+          cp -r build/MovieBoxApp.xcarchive/Products/Applications/MovieBoxApp.app Payload/
+          zip -r MovieBox-Unsigned.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: MovieBox-Unsigned-IPA
+          path: MovieBox-Unsigned.ipa
