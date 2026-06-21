@@ -20,7 +20,7 @@ jobs:
         run: |
           mkdir -p Assets.xcassets/AppIcon.appiconset
           
-          # تحميل أيقونة سوداء احترافية
+          # تحميل أيقونة سوداء احترافية بحجم 1024x1024
           curl -s -o Assets.xcassets/AppIcon.appiconset/icon.png "https://dummyimage.com/1024x1024/000000/ffffff.png&text=Movie+Box"
           
           cat > Assets.xcassets/AppIcon.appiconset/Contents.json << 'EOF'
@@ -120,11 +120,7 @@ jobs:
                   
                   // إخفاء هوية المتصفح ليظهر التطبيق كتطبيق أصلي (Native App)
                   // هذا يخدع الموقع ليعطي تجربة خالية من إعلانات الويب
-                  if let userAgent = UIWebView().stringByEvaluatingJavaScript(from: "navigator.userAgent") {
-                      config.applicationNameForUserAgent = userAgent + " MovieBoxNativeApp/1.0"
-                  } else {
-                      config.applicationNameForUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 MovieBoxNativeApp/1.0"
-                  }
+                  config.applicationNameForUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 MovieBoxNativeApp/1.0"
                   
                   // تطبيق حظر الخوادم
                   WKContentRuleListStore.default().compileContentRuleList(
