@@ -1,4 +1,4 @@
-name: Build Pro iOS IPA
+name: Build Pro Native iOS IPA
 
 on:
   workflow_dispatch:
@@ -20,8 +20,8 @@ jobs:
         run: |
           mkdir -p Assets.xcassets/AppIcon.appiconset
           
-          # تحميل أيقونة سوداء احترافية بحجم 1024x1024
-          curl -s -o Assets.xcassets/AppIcon.appiconset/icon.png "https://dummyimage.com/1024x1024/000000/ffffff.png&text=MovieBox"
+          # تحميل أيقونة سوداء احترافية
+          curl -s -o Assets.xcassets/AppIcon.appiconset/icon.png "https://dummyimage.com/1024x1024/000000/ffffff.png&text=Movie+Box"
           
           cat > Assets.xcassets/AppIcon.appiconset/Contents.json << 'EOF'
           {
@@ -53,12 +53,12 @@ jobs:
         run: |
           mkdir -p MovieBoxApp.xcodeproj/xcshareddata/xcschemes
 
-          # 1. إنشاء كود Swift (تطبيق شاشة كاملة + حظر إعلانات قوي جداً)
+          # 1. إنشاء كود Swift (تطبيق أصلي - واجهة سينمائية - حظر إعلانات صارم)
           cat > MovieBoxApp.swift << 'EOF'
           import SwiftUI
           import WebKit
 
-          // قواعد حظر خوادم الإعلانات
+          // قواعد حظر خوادم الإعلانات بشكل صارم
           let adBlockRules = """
           [
               {"trigger": {"url-filter": ".*googleads.*"}, "action": {"type": "block"}},
@@ -70,25 +70,32 @@ jobs:
               {"trigger": {"url-filter": ".*aliexpress.*"}, "action": {"type": "block"}},
               {"trigger": {"url-filter": ".*shein.*"}, "action": {"type": "block"}},
               {"trigger": {"url-filter": ".*googlesyndication.*"}, "action": {"type": "block"}},
-              {"trigger": {"url-filter": ".*"}, "action": {"type": "css-display-none", "selector": "iframe[src*='ads'], .ad, .ads, #ad, #ads, .banner_ad, [id^='google_ads'], [class*='advertisement'], .popup, .modal"}}
+              {"trigger": {"url-filter": ".*cdn.*ads.*"}, "action": {"type": "block"}},
+              {"trigger": {"url-filter": ".*"}, "action": {"type": "css-display-none", "selector": "iframe[src*='ads'], .ad, .ads, #ad, #ads, .banner_ad, [id^='google_ads'], [class*='advertisement'], .popup, .modal, div[class*='pop-'], div[id*='ad-']"}}
           ]
           """
 
-          // سكربت جافا سكربت قوي لإخفاء أي إعلانات ديناميكية ومنع النوافذ المنبثقة
+          // سكربت جافا سكربت متقدم لمنع الإعلانات المنبثقة
           let adBlockScript = """
           (function() {
-              // منع النوافذ المنبثقة
-              window.open = function() { console.log('Pop-up blocked'); return null; };
+              // 1. منع فتح أي نافذة منبثقة
+              window.open = function() { return null; };
               
-              // حذف العناصر المزعجة
+              // 2. منع إعادة توجيه الصفحة المخفية
+              window.addEventListener('beforeunload', function(e) {
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+              }, true);
+              
+              // 3. حذف العناصر المزعجة فور ظهورها
               function removeAds() {
-                  const adSelectors = ['iframe[src*="ads"]', '.ad', '.ads', '#ad', '#ads', '.banner_ad', '[id^="google_ads"]', '[class*="advertisement"]', '.popup', '.modal', 'div[class*="pop"]', 'div[id*="pop"]'];
+                  const adSelectors = ['iframe[src*="ads"]', '.ad', '.ads', '#ad', '#ads', '.banner_ad', '[id^="google_ads"]', '[class*="advertisement"]', '.popup', '.modal', 'div[class*="pop"]', 'div[id*="pop"]', 'div[id*="banner"]'];
                   adSelectors.forEach(selector => {
                       document.querySelectorAll(selector).forEach(el => el.remove());
                   });
               }
               
-              // مراقبة الموقع وتنظيف الإعلانات باستمرار
+              // مراقبة الموقع بشكل دائم
               const observer = new MutationObserver(function(mutations) {
                   removeAds();
               });
@@ -98,18 +105,30 @@ jobs:
                   observer.observe(document.body, { childList: true, subtree: true });
               });
               
-              // تنظيف فوري
               removeAds();
           })();
           """
 
-          struct WebViewContainer: UIViewRepresentable {
-              func makeUIView(context: Context) -> WKWebView {
+          class UIKitWebView: UIViewController, WKNavigationDelegate, WKUIDelegate {
+              var webView: WKWebView!
+              var toolBar: UIToolbar!
+              
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  
                   let config = WKWebViewConfiguration()
+                  
+                  // إخفاء هوية المتصفح ليظهر التطبيق كتطبيق أصلي (Native App)
+                  // هذا يخدع الموقع ليعطي تجربة خالية من إعلانات الويب
+                  if let userAgent = UIWebView().stringByEvaluatingJavaScript(from: "navigator.userAgent") {
+                      config.applicationNameForUserAgent = userAgent + " MovieBoxNativeApp/1.0"
+                  } else {
+                      config.applicationNameForUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 MovieBoxNativeApp/1.0"
+                  }
                   
                   // تطبيق حظر الخوادم
                   WKContentRuleListStore.default().compileContentRuleList(
-                      forIdentifier: "ContentBlocker",
+                      forIdentifier: "ContentBlockerPro",
                       encodedContentRuleList: adBlockRules
                   ) { ruleList, error in
                       if let ruleList = ruleList {
@@ -121,77 +140,82 @@ jobs:
                   let userScript = WKUserScript(source: adBlockScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
                   config.userContentController.addUserScript(userScript)
                   
-                  // إعداد الويب فيو (شاشة كاملة بدون هوامش)
-                  let webView = WKWebView(frame: .zero, configuration: config)
+                  // إعداد الويب فيو بشاشة كاملة
+                  webView = WKWebView(frame: view.bounds, configuration: config)
+                  webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                  webView.navigationDelegate = self
+                  webView.uiDelegate = self
                   webView.scrollView.contentInsetAdjustmentBehavior = .never
                   webView.allowsBackForwardNavigationGestures = true
-                  webView.navigationDelegate = context.coordinator
+                  view.addSubview(webView)
+                  
+                  // شريط أدوات سفلي عائم شفاف
+                  setupFloatingToolbar()
                   
                   if let url = URL(string: "https://movie-box.co/") {
                       webView.load(URLRequest(url: url))
                   }
-                  return webView
               }
               
-              func updateUIView(_ uiView: WKWebView, context: Context) {}
+              func setupFloatingToolbar() {
+                  toolBar = UIToolbar()
+                  toolBar.translatesAutoresizingMaskIntoConstraints = false
+                  toolBar.barTintColor = UIColor.black.withAlphaComponent(0.6)
+                  toolBar.alpha = 0.0 // شفاف افتراضياً
+                  
+                  let back = UIBarButtonItem(image: UIImage(systemName: "chevron.left"), style: .plain, target: self, action: #selector(goBack))
+                  let forward = UIBarButtonItem(image: UIImage(systemName: "chevron.right"), style: .plain, target: self, action: #selector(goForward))
+                  let reload = UIBarButtonItem(image: UIImage(systemName: "arrow.clockwise"), style: .plain, target: self, action: #selector(reloadPage))
+                  let share = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.up"), style: .plain, target: self, action: #selector(shareTapped))
+                  let flexible = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+                  
+                  toolBar.items = [back, flexible, forward, flexible, reload, flexible, share]
+                  toolBar.tintColor = .white
+                  
+                  view.addSubview(toolBar)
+                  
+                  NSLayoutConstraint.activate([
+                        toolBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -10),
+                        toolBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+                        toolBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+                        toolBar.heightAnchor.constraint(equalToConstant: 44)
+                  ])
+              }
               
-              func makeCoordinator() -> Coordinator { Coordinator() }
-              
-              class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
-                  // منع أي نافذة منبثقة من الفتح
-                  func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-                      if navigationAction.targetFrame == nil {
-                          webView.load(navigationAction.request)
-                      }
-                      return nil
+              override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+                  super.touchesBegan(touches, with: event)
+                  // إظهار أو إخفاء الشريط عند اللمس
+                  UIView.animate(withDuration: 0.3) {
+                      self.toolBar.alpha = self.toolBar.alpha == 0.0 ? 1.0 : 0.0
                   }
+              }
+              
+              @objc func goBack() { if webView.canGoBack { webView.goBack() } }
+              @objc func goForward() { if webView.canGoForward { webView.goForward() } }
+              @objc func reloadPage() { webView.reload() }
+              @objc func shareTapped() {
+                  guard let url = webView.url else { return }
+                  let shareSheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                  present(shareSheet, animated: true)
+              }
+              
+              // منع أي نافذة منبثقة من الفتح بشكل جذري
+              func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+                  if navigationAction.targetFrame == nil {
+                      webView.load(navigationAction.request)
+                  }
+                  return nil
               }
           }
 
           @main
           struct MovieBoxApp: App {
-              @State private var showControls = false
-              
               var body: some Scene {
                   WindowGroup {
-                      ZStack {
-                          // خلفية سوداء لملء الشاشة
-                          Color.black.ignoresSafeArea()
-                          
-                          // عرض الموقع بملء الشاشة
-                          WebViewContainer()
-                              .ignoresSafeArea()
-                          
-                          // أزرار التحكم العائمة (تظهر عند اللمس)
-                          if showControls {
-                              VStack {
-                                  Spacer()
-                                  HStack {
-                                      Button(action: { /* Back action can be added via coordinator if needed */ }) {
-                                          Image(systemName: "chevron.left")
-                                              .padding()
-                                      }
-                                      Spacer()
-                                      Button(action: {}) {
-                                          Image(systemName: "arrow.clockwise")
-                                              .padding()
-                                      }
-                                  }
-                                  .padding()
-                                  .background(Color.black.opacity(0.5))
-                                  .cornerRadius(20)
-                                  .padding(.bottom, 30)
-                              }
-                              .foregroundColor(.white)
-                              .transition(.opacity)
-                          }
-                      }
-                      .preferredColorScheme(.dark)
-                      .onTapGesture {
-                          withAnimation(.easeInOut(duration: 0.3)) {
-                              showControls.toggle()
-                          }
-                      }
+                      // تغليف الـ UIKit داخل SwiftUI لضمان عمل الـ Safe Area بشكل احترافي
+                      UIKitWebView()
+                          .ignoresSafeArea()
+                          .preferredColorScheme(.dark)
                   }
               }
           }
@@ -527,5 +551,5 @@ jobs:
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MovieBox-Pro-IPA
+          name: MovieBox-Native-Pro-IPA
           path: MovieBox-Unsigned.ipa
