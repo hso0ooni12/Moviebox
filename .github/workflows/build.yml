@@ -53,7 +53,7 @@ jobs:
         run: |
           mkdir -p MovieBoxApp.xcodeproj/xcshareddata/xcschemes
 
-          # 1. إنشاء كود Swift (تطبيق أصلي - واجهة سينمائية - حظر إعلانات صارم)
+          # 1. إنشاء كود Swift (مصلح بالكامل - تطبيق أصلي - واجهة سينمائية - حظر إعلانات صارم)
           cat > MovieBoxApp.swift << 'EOF'
           import SwiftUI
           import WebKit
@@ -109,7 +109,18 @@ jobs:
           })();
           """
 
-          class UIKitWebView: UIViewController, WKNavigationDelegate, WKUIDelegate {
+          // تغليف الـ UIKit داخل SwiftUI بشكل صحيح (UIViewControllerRepresentable)
+          struct WebViewWrapper: UIViewControllerRepresentable {
+              func makeUIViewController(context: Context) -> WebViewController {
+                  return WebViewController()
+              }
+              
+              func updateUIViewController(_ uiViewController: WebViewController, context: Context) {
+                  // لا حاجة لأي تحديثات هنا
+              }
+          }
+
+          class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
               var webView: WKWebView!
               var toolBar: UIToolbar!
               
@@ -119,7 +130,6 @@ jobs:
                   let config = WKWebViewConfiguration()
                   
                   // إخفاء هوية المتصفح ليظهر التطبيق كتطبيق أصلي (Native App)
-                  // هذا يخدع الموقع ليعطي تجربة خالية من إعلانات الويب
                   config.applicationNameForUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 MovieBoxNativeApp/1.0"
                   
                   // تطبيق حظر الخوادم
@@ -208,8 +218,8 @@ jobs:
           struct MovieBoxApp: App {
               var body: some Scene {
                   WindowGroup {
-                      // تغليف الـ UIKit داخل SwiftUI لضمان عمل الـ Safe Area بشكل احترافي
-                      UIKitWebView()
+                      // استخدام التغليف الصحيح لـ UIKit
+                      WebViewWrapper()
                           .ignoresSafeArea()
                           .preferredColorScheme(.dark)
                   }
