@@ -1,0 +1,15 @@
+{
+  "appName": "Movie Box",
+  "appBundleId": "com.yourname.moviebox",
+  "appVersion": "1.0.0",
+  "appIconUrl": "https://movie-box.co/favicon.ico",
+  "webUrl": "https://movie-box.co/",
+  "allowInlineMediaPlayback": true,
+  "allowFileAccess": false,
+  "orientation": "portrait",
+  "navigationBar": {
+    "enabled": false,
+    "backgroundColor": "#000000",
+    "tintColor": "#ffffff"
+  }
+}
