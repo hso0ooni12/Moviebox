@@ -19,10 +19,9 @@ jobs:
       - name: Create Xcode Project Files
         run: |
           mkdir -p MovieBoxApp.xcodeproj/xcshareddata/xcschemes
-          mkdir -p MovieBoxApp
 
           # 1. إنشاء كود Swift لفتح الموقع
-          cat > MovieBoxApp/MovieBoxApp.swift << 'EOF'
+          cat > MovieBoxApp.swift << 'EOF'
           import SwiftUI
           import WebKit
 
@@ -51,7 +50,7 @@ jobs:
           EOF
 
           # 2. إنشاء ملف Info.plist يدوياً
-          cat > MovieBoxApp/Info.plist << 'EOF'
+          cat > Info.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -226,7 +225,7 @@ jobs:
                           CODE_SIGN_IDENTITY = "";
                           CODE_SIGNING_ALLOWED = NO;
                           CODE_SIGNING_REQUIRED = NO;
-                          INFOPLIST_FILE = MovieBoxApp/Info.plist;
+                          INFOPLIST_FILE = Info.plist;
                           INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
                           INFOPLIST_KEY_UILaunchScreen_Generation = YES;
                           LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -244,7 +243,7 @@ jobs:
                           CODE_SIGN_IDENTITY = "";
                           CODE_SIGNING_ALLOWED = NO;
                           CODE_SIGNING_REQUIRED = NO;
-                          INFOPLIST_FILE = MovieBoxApp/Info.plist;
+                          INFOPLIST_FILE = Info.plist;
                           INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
                           INFOPLIST_KEY_UILaunchScreen_Generation = YES;
                           LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -282,7 +281,7 @@ jobs:
           }
           EOF
 
-          # 4. إنشاء ملف Scheme يدوياً لحل مشكلة xcodebuild
+          # 4. إنشاء ملف Scheme
           cat > MovieBoxApp.xcodeproj/xcshareddata/xcschemes/MovieBoxApp.xcscheme << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <Scheme
