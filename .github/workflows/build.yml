@@ -22,7 +22,7 @@ jobs:
           mkdir -p MovieBoxApp
           cd MovieBoxApp
 
-          # 2. إنشاء ملفات Swift الخاصة بفتح الموقع (WebView)
+          # 2. إنشاء كود Swift (لفتح الموقع داخل التطبيق)
           cat > MovieBoxApp.swift << 'EOF'
           import SwiftUI
           import WebKit
@@ -53,7 +53,58 @@ jobs:
           }
           EOF
 
-          # 3. إنشاء ملف project.yml لبناء مشروع Xcode باستخدام XcodeGen
+          # 3. إنشاء ملف Info.plist يدوياً (لحل مشكلة الخطأ السابق)
+          cat > Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>$(DEVELOPMENT_LANGUAGE)</string>
+              <key>CFBundleExecutable</key>
+              <string>$(EXECUTABLE_NAME)</string>
+              <key>CFBundleIdentifier</key>
+              <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>$(PRODUCT_NAME)</string>
+              <key>CFBundlePackageType</key>
+              <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UIApplicationSceneManifest</key>
+              <dict>
+                  <key>UIApplicationSupportsMultipleScenes</key>
+                  <false/>
+              </dict>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+              </array>
+              <key>UISupportedInterfaceOrientations~ipad</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+                  <string>UIInterfaceOrientationPortraitUpsideDown</string>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+              <key>NSAppTransportSecurity</key>
+              <dict>
+                  <key>NSAllowsArbitraryLoads</key>
+                  <true/>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          # 4. إنشاء ملف project.yml الخاص بـ XcodeGen
           cat > project.yml << 'EOF'
           name: MovieBoxApp
           options:
@@ -69,19 +120,17 @@ jobs:
               settings:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: com.moviebox.app
-                  INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-                  INFOPLIST_KEY_UILaunchScreen_Generation: YES
-                  INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
-                  ASSETCATALOG_COMPILER_APPICON_NAME: ""
+                  INFOPLIST_FILE: Info.plist
                   CODE_SIGNING_ALLOWED: NO
                   CODE_SIGNING_REQUIRED: NO
+                  TARGETED_DEVICE_FAMILY: "1,2"
           EOF
 
-          # 4. تثبيت أداة XcodeGen وإنشاء مشروع Xcode
+          # 5. تثبيت أداة XcodeGen وإنشاء مشروع Xcode
           brew install xcodegen
           xcodegen generate
 
-          # 5. بناء التطبيق وأرشفته
+          # 6. بناء التطبيق وأرشفته
           xcodebuild -project MovieBoxApp.xcodeproj \
           -scheme MovieBoxApp \
           -configuration Release \
@@ -89,7 +138,7 @@ jobs:
           -destination "generic/platform=iOS" \
           archive CODE_SIGNING_ALLOWED=NO
 
-          # 6. استخراج ملف .ipa غير الموقع
+          # 7. استخراج ملف .ipa غير الموقع
           mkdir -p Payload
           cp -r build/MovieBoxApp.xcarchive/Products/Applications/MovieBoxApp.app Payload/
           zip -r MovieBox-Unsigned.ipa Payload
