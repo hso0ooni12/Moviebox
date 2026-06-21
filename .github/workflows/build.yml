@@ -1,4 +1,4 @@
-name: Build iOS IPA
+name: Build Pro iOS IPA
 
 on:
   workflow_dispatch:
@@ -16,34 +16,161 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
+      - name: Create App Icon and Assets
+        run: |
+          mkdir -p Assets.xcassets/AppIcon.appiconset
+          
+          # إنشاء أيقونة التطبيق (1024x1024) بلون أسود ونص أبيض
+          curl -s -o Assets.xcassets/AppIcon.appiconset/icon.png "https://dummyimage.com/1024x1024/000000/ffffff.png&text=Movie+Box"
+          
+          cat > Assets.xcassets/AppIcon.appiconset/Contents.json << 'EOF'
+          {
+            "images" : [
+              {
+                "filename" : "icon.png",
+                "idiom" : "universal",
+                "platform" : "ios",
+                "size" : "1024x1024"
+              }
+            ],
+            "info" : {
+              "author" : "xcode",
+              "version" : 1
+            }
+          }
+          EOF
+          
+          cat > Assets.xcassets/Contents.json << 'EOF'
+          {
+            "info" : {
+              "author" : "xcode",
+              "version" : 1
+            }
+          }
+          EOF
+
       - name: Create Xcode Project Files
         run: |
           mkdir -p MovieBoxApp.xcodeproj/xcshareddata/xcschemes
 
-          # 1. إنشاء كود Swift لفتح الموقع
+          # 1. إنشاء كود Swift (واجهة احترافية + حظر إعلانات + شريط أدوات)
           cat > MovieBoxApp.swift << 'EOF'
           import SwiftUI
           import WebKit
 
-          struct WebView: UIViewRepresentable {
-              let url: URL
-              func makeUIView(context: Context) -> WKWebView {
-                  let configuration = WKWebViewConfiguration()
-                  configuration.allowsInlineMediaPlayback = true
-                  configuration.mediaTypesRequiringUserActionForPlayback = []
-                  let webView = WKWebView(frame: .zero, configuration: configuration)
-                  webView.load(URLRequest(url: url))
-                  webView.allowsBackForwardNavigationGestures = true
-                  return webView
+          // قواعد حظر الإعلانات (AdBlocker Rules)
+          let adBlockRules = """
+          [
+              {"trigger": {"url-filter": ".*googleads.*"}, "action": {"type": "block"}},
+              {"trigger": {"url-filter": ".*doubleclick.*"}, "action": {"type": "block"}},
+              {"trigger": {"url-filter": ".*adservice.*"}, "action": {"type": "block"}},
+              {"trigger": {"url-filter": ".*adsterra.*"}, "action": {"type": "block"}},
+              {"trigger": {"url-filter": ".*popads.*"}, "action": {"type": "block"}},
+              {"trigger": {"url-filter": ".*propellerads.*"}, "action": {"type": "block"}},
+              {"trigger": {"url-filter": ".*"}, "action": {"type": "css-display-none", "selector": "iframe[src*='ads'], .ad, .ads, #ad, #ads, .banner_ad, [id^='google_ads'], [class*='advertisement']"}}
+          ]
+          """
+
+          struct WebViewContainer: UIViewControllerRepresentable {
+              func makeUIViewController(context: Context) -> UINavigationController {
+                  let webVC = WebViewController()
+                  let navController = UINavigationController(rootViewController: webVC)
+                  return navController
               }
-              func updateUIView(_ uiView: WKWebView, context: Context) {}
+              func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
+          }
+
+          class WebViewController: UIViewController, WKNavigationDelegate {
+              var webView: WKWebView!
+              var progressView: UIProgressView!
+
+              override func viewDidLoad() {
+                  super.viewDidLoad()
+                  
+                  let config = WKWebViewConfiguration()
+                  
+                  // تطبيق حظر الإعلانات
+                  WKContentRuleListStore.default().compileContentRuleList(
+                      forIdentifier: "AdBlocker",
+                      encodedContentRuleList: adBlockRules
+                  ) { ruleList, error in
+                      if let ruleList = ruleList {
+                          config.userContentController.add(ruleList)
+                      }
+                      DispatchQueue.main.async {
+                          self.setupWebView(config: config)
+                      }
+                  }
+              }
+              
+              func setupWebView(config: WKWebViewConfiguration) {
+                  webView = WKWebView(frame: view.bounds, configuration: config)
+                  webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                  webView.navigationDelegate = self
+                  view.addSubview(webView)
+                  
+                  // إعداد شريط التحميل العلوي
+                  progressView = UIProgressView(progressViewStyle: .bar)
+                  progressView.translatesAutoresizingMaskIntoConstraints = false
+                  progressView.tintColor = .systemBlue
+                  navigationController?.navigationBar.addSubview(progressView)
+                  
+                  NSLayoutConstraint.activate([
+                      progressView.bottomAnchor.constraint(equalTo: navigationController!.navigationBar.bottomAnchor),
+                      progressView.leadingAnchor.constraint(equalTo: navigationController!.navigationBar.leadingAnchor),
+                      progressView.trailingAnchor.constraint(equalTo: navigationController!.navigationBar.trailingAnchor)
+                  ])
+                  
+                  webView.addObserver(self, forKeyPath: #keyPath(WKWebView.estimatedProgress), options: .new, context: nil)
+                  
+                  // إعداد شريط الأدوات السفلي
+                  navigationController?.isToolbarHidden = false
+                  navigationController?.toolbar.barTintColor = .systemBackground
+                  
+                  let back = UIBarButtonItem(image: UIImage(systemName: "chevron.left"), style: .plain, target: webView, action: #selector(webView.goBack))
+                  let forward = UIBarButtonItem(image: UIImage(systemName: "chevron.right"), style: .plain, target: webView, action: #selector(webView.goForward))
+                  let reload = UIBarButtonItem(image: UIImage(systemName: "arrow.clockwise"), style: .plain, target: webView, action: #selector(webView.reload))
+                  let share = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.up"), style: .plain, target: self, action: #selector(shareTapped))
+                  let flexible = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+                  
+                  toolbarItems = [back, flexible, forward, flexible, reload, flexible, share]
+                  
+                  back.tintColor = .systemBlue
+                  forward.tintColor = .systemBlue
+                  reload.tintColor = .systemBlue
+                  share.tintColor = .systemBlue
+                  
+                  if let url = URL(string: "https://movie-box.co/") {
+                      webView.load(URLRequest(url: url))
+                  }
+              }
+              
+              @objc func shareTapped() {
+                  guard let url = webView.url else { return }
+                  let shareSheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                  present(shareSheet, animated: true)
+              }
+              
+              override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+                  if keyPath == "estimatedProgress" {
+                      progressView.progress = Float(webView.estimatedProgress)
+                      progressView.isHidden = webView.estimatedProgress >= 1.0
+                  }
+              }
+              
+              func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+                  title = webView.title
+                  // إخفاء عناصر المتصفح الخاصة بالموقع إذا وجدت لتبدو كتطبيق
+                  webView.evaluateJavaScript("document.querySelector('meta[name=viewport]').setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0');", completionHandler: nil)
+              }
           }
 
           @main
           struct MovieBoxApp: App {
               var body: some Scene {
                   WindowGroup {
-                      WebView(url: URL(string: "https://movie-box.co/")!)
+                      WebViewContainer()
+                          .preferredColorScheme(.dark) // إجبار الوضع الليلي ليناسب مواقع الأفلام
                   }
               }
           }
@@ -74,7 +201,12 @@ jobs:
               <key>LSRequiresIPhoneOS</key>
               <true/>
               <key>UILaunchScreen</key>
-              <dict/>
+              <dict>
+                  <key>UIColorName</key>
+                  <string>black</string>
+              </dict>
+              <key>UIUserInterfaceStyle</key>
+              <string>Dark</string>
               <key>UISupportedInterfaceOrientations</key>
               <array>
                   <string>UIInterfaceOrientationPortrait</string>
@@ -95,7 +227,7 @@ jobs:
           </plist>
           EOF
 
-          # 3. إنشاء ملف project.pbxproj
+          # 3. إنشاء ملف project.pbxproj (مع إضافة الأيقونات)
           cat > MovieBoxApp.xcodeproj/project.pbxproj << 'EOF'
           // !$*UTF8*$!
           {
@@ -107,10 +239,12 @@ jobs:
                   111111111111111111111101 /* MovieBoxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieBoxApp.swift; sourceTree = "<group>"; };
                   111111111111111111111102 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
                   111111111111111111111103 /* MovieBoxApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MovieBoxApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+                  222222222222222222222201 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
           /* End PBXFileReference section */
 
           /* Begin PBXBuildFile section */
                   111111111111111111111104 /* MovieBoxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111111111111111111111101 /* MovieBoxApp.swift */; };
+                  222222222222222222222202 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 222222222222222222222201 /* Assets.xcassets */; };
           /* End PBXBuildFile section */
 
           /* Begin PBXGroup section */
@@ -120,6 +254,7 @@ jobs:
                           111111111111111111111120 /* Products */,
                           111111111111111111111101 /* MovieBoxApp.swift */,
                           111111111111111111111102 /* Info.plist */,
+                          222222222222222222222201 /* Assets.xcassets */,
                       );
                       sourceTree = "<group>";
                   };
@@ -139,6 +274,7 @@ jobs:
                       buildConfigurationList = 111111111111111111111150 /* Build configuration list for PBXNativeTarget "MovieBoxApp" */;
                       buildPhases = (
                           111111111111111111111140 /* Sources */,
+                          333333333333333333333340 /* Resources */,
                       );
                       buildRules = ();
                       dependencies = ();
@@ -166,6 +302,17 @@ jobs:
                       );
                   };
           /* End PBXProject section */
+
+          /* Begin PBXResourcesBuildPhase section */
+                  333333333333333333333340 /* Resources */ = {
+                      isa = PBXResourcesBuildPhase;
+                      buildActionMask = 2147483647;
+                      files = (
+                          222222222222222222222202 /* Assets.xcassets in Resources */,
+                      );
+                      runOnlyForDeploymentPostprocessing = 0;
+                  };
+          /* End PBXResourcesBuildPhase section */
 
           /* Begin PBXSourcesBuildPhase section */
                   111111111111111111111140 /* Sources */ = {
@@ -345,7 +492,6 @@ jobs:
 
       - name: Build and Archive IPA
         run: |
-          # بناء التطبيق باستخدام الـ Scheme الجاهز
           xcodebuild -project MovieBoxApp.xcodeproj \
           -scheme MovieBoxApp \
           -configuration Release \
@@ -353,7 +499,6 @@ jobs:
           -destination "generic/platform=iOS" \
           archive CODE_SIGNING_ALLOWED=NO
 
-          # استخراج ملف .ipa
           mkdir -p Payload
           cp -r build/MovieBoxApp.xcarchive/Products/Applications/MovieBoxApp.app Payload/
           zip -r MovieBox-Unsigned.ipa Payload
@@ -361,5 +506,5 @@ jobs:
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MovieBox-Unsigned-IPA
+          name: MovieBox-Pro-IPA
           path: MovieBox-Unsigned.ipa
